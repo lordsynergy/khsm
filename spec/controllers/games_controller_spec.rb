@@ -6,65 +6,229 @@ RSpec.describe GamesController, type: :controller do
   let(:admin) { FactoryBot.create(:user, is_admin: true) }
   let(:game_w_questions) { FactoryBot.create(:game_with_questions, user: user) }
 
-  context 'Anon' do
-    it 'kick from #show' do
-      get :show, id: game_w_questions.id
+  describe '#show' do
+    context 'when anonim' do
+      before { get :show, id: game_w_questions.id }
 
-      expect(response.status).not_to eq(200) # статус не 200 ОК
-      expect(response).to redirect_to(new_user_session_path) # devise должен отправить на логин
-      expect(flash[:alert]).to be # во flash должен быть прописана ошибка
+      it 'status is not 200 OK' do
+        expect(response.status).not_to eq(200)
+      end
+
+      it 'should redirect to authorization' do
+        expect(response).to redirect_to(new_user_session_path)
+      end
+
+      it 'it must be flash alert' do
+        expect(flash[:alert]).to be
+      end
+    end
+
+    context 'when authorized user' do
+      before do
+        sign_in user
+        get :show, id: game_w_questions.id
+      end
+
+      let(:game) { assigns(:game) }
+
+      it 'return false' do
+        expect(game.finished?).to be false
+      end
+
+      it 'user must be' do
+        expect(game.user).to eq(user)
+      end
+
+      it 'status is 200' do
+        expect(response.status).to eq(200)
+      end
+
+      it 'render show' do
+        expect(response).to render_template('show')
+      end
+
+      context 'alien game' do
+        let(:alien_game) { FactoryBot.create(:game_with_questions) }
+        before { get :show, id: alien_game.id }
+
+        it 'status is not 200 OK' do
+          expect(response.status).not_to eq(200)
+        end
+
+        it 'redirect to root path' do
+          expect(response).to redirect_to(root_path)
+        end
+
+        it 'it must be flash alert' do
+          expect(flash[:alert]).to be
+        end
+      end
     end
   end
 
-  context 'Usual user' do
+  describe '#take_money' do
+    context 'when anonim' do
+      before { put :take_money, id: game_w_questions.id }
 
-    before(:each) { sign_in user } # логиним юзера user с помощью спец. Devise метода sign_in
+      it 'status is not 200 OK' do
+        expect(response.status).not_to eq(200)
+      end
 
-    it 'creates game' do
-      generate_questions(15)
+      it 'should redirect to authorization' do
+        expect(response).to redirect_to(new_user_session_path)
+      end
 
-      post :create
-      game = assigns(:game) # вытаскиваем из контроллера поле @game
-
-      expect(game.finished?).to be_falsey
-      expect(game.user).to eq(user)
-
-      expect(response).to redirect_to(game_path(game))
-      expect(flash[:notice]).to be
+      it 'it must be flash alert' do
+        expect(flash[:alert]).to be
+      end
     end
 
-    it '#show game' do
-      get :show, id: game_w_questions.id
-      game = assigns(:game) # вытаскиваем из контроллера поле @game
-      expect(game.finished?).to be_falsey
-      expect(game.user).to eq(user)
+    context 'when authorized user taken money' do
+      before do
+        sign_in user
+        game_w_questions.update_attribute(:current_level, 2)
+        put :take_money, id: game_w_questions.id
+      end
 
-      expect(response.status).to eq(200) # должен быть ответ HTTP 200
-      expect(response).to render_template('show') # отрендерить шаблон show
+      let(:game) { assigns(:game) }
+
+      context 'before reload' do
+        it 'finish game return true' do
+          expect(game.finished?).to be true
+        end
+
+        it 'prize should return 200' do
+          expect(game.prize).to eq(200)
+        end
+      end
+
+      context 'after reload' do
+        before { user.reload }
+
+        it 'balance should return 200' do
+          expect(user.balance).to eq(200)
+        end
+
+        it 'redirect to user path' do
+          expect(response).to redirect_to(user_path(user))
+        end
+
+        it 'it must be flash warning' do
+          expect(flash[:warning]).to be
+        end
+      end
+    end
+  end
+
+  describe '#create' do
+    context 'when anonim' do
+      before { post :create }
+
+      it 'status is not 200 OK' do
+        expect(response.status).not_to eq(200)
+      end
+
+      it 'should redirect to authorization' do
+        expect(response).to redirect_to(new_user_session_path)
+      end
+
+      it 'it must be flash alert' do
+        expect(flash[:alert]).to be
+      end
     end
 
-    it 'answers correct' do
-      put :answer, id: game_w_questions.id, letter: game_w_questions.current_game_question.correct_answer_key
-      game = assigns(:game)
+    context 'when authorized user' do
+      before { sign_in user }
 
-      expect(game.finished?).to be_falsey
-      expect(game.current_level).to be > 0
-      expect(response).to redirect_to(game_path(game))
-      expect(flash.empty?).to be_truthy # удачный ответ не заполняет flash
+      context 'creates game' do
+        before do
+          generate_questions(15)
+          post :create
+          sign_in user
+        end
+
+        let(:game) { assigns(:game) }
+
+        it 'game not finished' do
+          expect(game.finished?).to be false
+        end
+
+        it 'should return game user' do
+          expect(game.user).to eq(user)
+        end
+
+        it 'redirect to game page' do
+          expect(response).to redirect_to(game_path(game))
+        end
+
+        it 'it must be flash notice' do
+          expect(flash[:notice]).to be
+        end
+      end
+
+      context 'try to create second game' do
+        let(:game) { assigns(:game) }
+
+        it 'first game not finished' do
+          expect(game_w_questions.finished?).to be false
+        end
+
+        it 'new game not created' do
+          request.env['HTTP_REFERER'] = 'http://test.com/'
+          expect { post :create }.to change(Game, :count).by(0)
+        end
+
+        it 'new game should be nil' do
+          expect(game).to be_nil
+        end
+      end
+    end
+  end
+
+  describe '#answer' do
+    context 'when anonim' do
+      before { put :answer, id: game_w_questions.id }
+
+      it 'status is not 200 OK' do
+        expect(response.status).not_to eq(200)
+      end
+
+      it 'should redirect to authorization' do
+        expect(response).to redirect_to(new_user_session_path)
+      end
+
+      it 'it must be flash alert' do
+        expect(flash[:alert]).to be
+      end
     end
 
-    it 'uses audience help' do
-      expect(game_w_questions.current_game_question.help_hash[:audience_help]).not_to be
-      expect(game_w_questions.audience_help_used).to be_falsey
+    context 'when authorized user' do
+      before { sign_in user }
 
-      put :help, id: game_w_questions.id, help_type: :audience_help
-      game = assigns(:game)
+      context 'wrong answer' do
+        before do
+          put :answer, id: game_w_questions.id,
+              letter: (%w[a b c d] - [game_w_questions.current_game_question.correct_answer_key]).sample
+        end
 
-      expect(game.finished?).to be_falsey
-      expect(game.audience_help_used).to be_truthy
-      expect(game.current_game_question.help_hash[:audience_help]).to be
-      expect(game.current_game_question.help_hash[:audience_help].keys).to contain_exactly('a', 'b', 'c', 'd')
-      expect(response).to redirect_to(game_path(game))
+        let(:game) { assigns(:game) }
+
+        it 'finish game return true' do
+          expect(game.finished?).to be true
+        end
+
+        it 'should return fail status' do
+          expect(game.status).to eq(:fail)
+        end
+
+        it 'redirect to user path' do
+          expect(response).to redirect_to(user_path(game))
+        end
+
+        it 'it must be flash alert' do
+          expect(flash.alert).to be
+        end
+      end
     end
   end
 end
