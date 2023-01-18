@@ -205,6 +205,31 @@ RSpec.describe GamesController, type: :controller do
     context 'when authorized user' do
       before { sign_in user }
 
+      context 'correct answer' do
+        before do
+          put :answer, id: game_w_questions.id,
+              letter: game_w_questions.current_game_question.correct_answer_key
+        end
+
+        let(:game) { assigns(:game) }
+
+        it 'game not finished' do
+          expect(game.finished?).to be false
+        end
+
+        it 'current level must be > 0' do
+          expect(game.current_level).to be > 0
+        end
+
+        it 'redirect to game path' do
+          expect(response).to redirect_to(game_path(game))
+        end
+
+        it 'flash empty should return true' do
+          expect(flash.empty?).to be true
+        end
+      end
+
       context 'wrong answer' do
         before do
           put :answer, id: game_w_questions.id,
