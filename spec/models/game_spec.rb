@@ -94,7 +94,7 @@ RSpec.describe Game, type: :model do
   end
 
   describe '#previous_level' do
-    it 'return 1' do
+    it 'returns the number of the previous level' do
       game_w_questions.current_level = 2
       expect(game_w_questions.previous_level).to eq(1)
     end
