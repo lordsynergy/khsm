@@ -256,4 +256,60 @@ RSpec.describe GamesController, type: :controller do
       end
     end
   end
+
+  describe '#help' do
+    context 'when anonim' do
+      before { put :help, id: game_w_questions.id }
+
+      it 'status is not 200 OK' do
+        expect(response.status).not_to eq(200)
+      end
+
+      it 'should redirect to authorization' do
+        expect(response).to redirect_to(new_user_session_path)
+      end
+
+      it 'it must be flash alert' do
+        expect(flash[:alert]).to be
+      end
+    end
+
+    context 'when authorized user' do
+      before { sign_in user }
+
+      context 'uses help' do
+        it 'fifty_fifty help not used' do
+          expect(game_w_questions.fifty_fifty_used).to be false
+        end
+
+        context 'after use fifty_fifty help' do
+          before do
+            put :help, id: game_w_questions.id, help_type: :fifty_fifty
+          end
+
+          let(:game) { assigns(:game) }
+
+          it 'game not finished' do
+            expect(game.finished?).to be false
+          end
+
+          it 'fifty_fifty help used, return true' do
+            expect(game.fifty_fifty_used).to be true
+          end
+
+          it 'fifty_fifty help must return an array' do
+            expect(game.current_game_question.help_hash[:fifty_fifty]).to be_an(Array)
+          end
+
+          it 'fifty_fifty help contains 2 answers' do
+            expect(game.current_game_question.help_hash[:fifty_fifty].size).to eq(2)
+          end
+
+          it 'redirect to game path' do
+            expect(response).to redirect_to(game_path(game))
+          end
+        end
+      end
+    end
+  end
 end
