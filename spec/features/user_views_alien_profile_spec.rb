@@ -45,7 +45,5 @@ RSpec.feature 'USER views alien profile', type: :feature do
     expect(page).to have_content '03 февр., 12:00'
 
     expect(page).to have_content '15 000 ₽'
-
-    # save_and_open_page
   end
 end
